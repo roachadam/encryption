@@ -17,6 +17,13 @@ class Encrypter implements EncrypterContract
     protected $key;
 
     /**
+     * The encryption iv.
+     *
+     * @var string
+     */
+    protected $iv;
+
+    /**
      * The algorithm used for encryption.
      *
      * @var string
@@ -32,12 +39,13 @@ class Encrypter implements EncrypterContract
      *
      * @throws \RuntimeException
      */
-    public function __construct($key, $cipher = 'AES-128-CBC')
+    public function __construct($key, $iv, $cipher = 'AES-256-CBC')
     {
         $key = (string) $key;
 
         if (static::supported($key, $cipher)) {
             $this->key = $key;
+            $this->iv = $iv;
             $this->cipher = $cipher;
         } else {
             throw new RuntimeException('The only supported ciphers are AES-128-CBC and AES-256-CBC with the correct key lengths.');
@@ -81,14 +89,14 @@ class Encrypter implements EncrypterContract
      */
     public function encrypt($value, $serialize = true)
     {
-        $iv = random_bytes(openssl_cipher_iv_length($this->cipher));
+        //$iv = random_bytes(openssl_cipher_iv_length($this->cipher));
 
         // First we will encrypt the value using OpenSSL. After this is encrypted we
         // will proceed to calculating a MAC for the encrypted value so that this
         // value can be verified later as not having been changed by the users.
         $value = \openssl_encrypt(
             $serialize ? serialize($value) : $value,
-            $this->cipher, $this->key, 0, $iv
+            $this->cipher, $this->key, 0, $this->iv
         );
 
         if ($value === false) {
@@ -98,7 +106,7 @@ class Encrypter implements EncrypterContract
         // Once we get the encrypted value we'll go ahead and base64_encode the input
         // vector and create the MAC for the encrypted value so we can then verify
         // its authenticity. Then, we'll JSON the data into the "payload" array.
-        $mac = $this->hash($iv = base64_encode($iv), $value);
+        $mac = $this->hash($iv = base64_encode($this->iv), $value);
 
         $json = json_encode(compact('iv', 'value', 'mac'));
 
